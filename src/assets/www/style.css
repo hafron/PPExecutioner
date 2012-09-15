@@ -1,0 +1,23 @@
+#timer_contaiter {
+	margin:0 auto;
+	height:30px;
+	width:280px;
+	background:url('images/progress_bar_empty.png');
+	position:relative
+}
+#timer {
+	height:30px;
+	width:280px;
+	text-align:center;
+	font-weight: bold;
+	position:absolute;
+	z-index:100;
+	padding-top:5px;
+}
+#progress {
+	height:30px;
+	width:280px;
+	background:url('images/progress_bar_full.png');
+	position:absolute;
+	top:0;
+}

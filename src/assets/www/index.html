@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Cordova</title>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="jquery.mobile-1.2.0-beta.1.min.css" />
+<link rel="stylesheet" href="style.css" />
+
+<script type="text/javascript" charset="utf-8" src="cordova-2.0.0.js"></script>
+<script src="jquery-1.8.1.min.js"></script>
+<script src="jquery-1.8.1.min.js"></script>
+<script src="jquery.mobile-1.2.0-beta.1.min.js"></script>
+
+<script type="text/javascript" charset="utf-8">  
+
+$.support.cors = true;
+$.mobile.allowCrossDomainPages = true;
+
+var POMODORO_TIME = 60*25;
+var SHORT_BREAK_TIME = 60*5;
+var STATE = "pomodoro"; // pomodoro or short_break or long_break
+
+var MEDIA = new Array();
+var MEDIA_PATH = "/android_asset/sounds/";
+
+function time_is_end()
+{
+    switch(STATE)
+    {
+        case "pomodoro":
+        	 MEDIA["start_break"].play(); 
+             STATE = "short_break";
+             start_timer(SHORT_BREAK_TIME);
+        break;
+        case "short_break":
+             STATE = "pomodoro";
+             start_timer(POMODORO_TIME);
+        break;
+    }
+}
+
+function start_timer(time_left)
+{ 
+  var min = Math.floor(time_left/60);
+  var sec = Math.floor(time_left-min*60);
+  $("#timer").text(((""+min).length == 1 ? "0"+min : min )+":"+((""+sec).length == 1 ? "0"+sec : sec));
+  setTimeout(function() { 
+      time_left-=1;
+      if(time_left >= 0)
+      {
+      	  update_progress_bar(time_left/POMODORO_TIME);
+          start_timer(time_left); 
+      }
+      else
+      {
+                time_is_end(); 
+      }
+  }, 1);
+}
+
+function update_progress_bar(percent)
+{
+	$("#progress").css("width", percent*280+"px");
+}
+
+function onDeviceReady(){  
+	MEDIA["start_break"] = new Media(MEDIA_PATH+"start_break.mp3");
+	MEDIA["finish_break"] = new Media(MEDIA_PATH+"finish_break.mp3");
+
+	
+    start_timer(POMODORO_TIME);
+    id("next_task").onclick = function()
+    {
+    	
+    }
+}  
+document.addEventListener("deviceready", onDeviceReady, false);
+
+
+  </script>  
+</head>
+<body> 
+<div data-role="page">
+	<div data-role="header">
+		<h1>PP - Executiener</h1>
+	</div>
+
+	<div data-role="content">	
+		<p>Ilość dni bez przerwania planu: <strong>5</strong>.</p>	
+		<p>Czas zakończenia pracy: <strong>21:51</strong></p>	
+		<h2>Matematyka</h2>
+		<div id="timer_contaiter">
+			<div id="timer">00:00</div>
+			<div id="progress"></div>
+		</div>
+		<button>Zmotywuj</button>
+		<button id="next_task">Następne zadanie</button>
+	</div>
+</div>
+</body>
+</html>
