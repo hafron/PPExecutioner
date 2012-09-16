@@ -4,20 +4,25 @@
 <title>Cordova</title>
 <meta charset="utf-8" />
 <link rel="stylesheet" href="jquery.mobile-1.2.0-beta.1.min.css" />
+<link rel="stylesheet" href="css/jquery.gritter.css" />
 <link rel="stylesheet" href="style.css" />
 
 <script type="text/javascript" charset="utf-8" src="cordova-2.0.0.js"></script>
 <script src="jquery-1.8.1.min.js"></script>
-<script src="jquery-1.8.1.min.js"></script>
+<script src="jquery.gritter.js"></script>
 <script src="jquery.mobile-1.2.0-beta.1.min.js"></script>
 
 <script type="text/javascript" charset="utf-8">  
 
+var SYNC_SERVER = "http://192.168.90.132:8080/sync";
+
 $.support.cors = true;
 $.mobile.allowCrossDomainPages = true;
 
-var POMODORO_TIME = 60*25;
+var POMODORO_TIME = 60*2;
 var SHORT_BREAK_TIME = 60*5;
+var LONG_BREAK_TIME = 60*15;
+
 var STATE = "pomodoro"; // pomodoro or short_break or long_break
 
 var MEDIA = new Array();
@@ -60,22 +65,34 @@ function start_timer(time_left)
 
 function update_progress_bar(percent)
 {
-	$("#progress").css("width", percent*280+"px");
+	$("#progress").css("width", percent*260+"px");
 }
 
 function onDeviceReady(){  
 	MEDIA["start_break"] = new Media(MEDIA_PATH+"start_break.mp3");
 	MEDIA["finish_break"] = new Media(MEDIA_PATH+"finish_break.mp3");
 
-	
     start_timer(POMODORO_TIME);
-    id("next_task").onclick = function()
+    if(navigator.network.connection.type != Connection.NONE)
     {
-    	
-    }
+    	$("#sync").bind("click", function(event, ui) {
+			$.getJSON(SYNC_SERVER, function(data) {
+			  $.gritter.add({ 
+    			title: 'Synchronizacja zakończona!',
+    			text: 'Synchronizacja z serwerem zakończyła się sukcesem.'
+  			});
+			
+				POMODORO_TIME = data["config"]["pomodoro_length"];
+				SHORT_BREAK_TIME = data["config"]["short_break_length"];
+				LONG_BREAK_TIME = data["config"]["long_break_length"];
+			});
+		});
+	} else
+	{
+		$("#sync").addClass('ui-disabled');
+	}
 }  
 document.addEventListener("deviceready", onDeviceReady, false);
-
 
   </script>  
 </head>
@@ -95,6 +112,8 @@ document.addEventListener("deviceready", onDeviceReady, false);
 		</div>
 		<button>Zmotywuj</button>
 		<button id="next_task">Następne zadanie</button>
+		<br><br><br>
+		<button id="sync" data-icon="refresh">Synchronizuj</button>
 	</div>
 </div>
 </body>

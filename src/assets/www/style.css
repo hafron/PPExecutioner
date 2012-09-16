@@ -16,8 +16,9 @@
 }
 #progress {
 	height:30px;
-	width:280px;
-	background:url('images/progress_bar_full.png');
+	width:260px;
+	background:url('images/progress_bar_full.png') no-repeat center;
 	position:absolute;
 	top:0;
+	left:10px;
 }
