@@ -12,53 +12,148 @@
 <script src="jquery.gritter.js"></script>
 <script src="jquery.mobile-1.2.0-beta.1.min.js"></script>
 
+<script src="jquery.json-2.4.min.js"></script>
+
 <script type="text/javascript" charset="utf-8">  
 
-var SYNC_SERVER = "http://192.168.90.132:8080/sync";
+var SYNC_SERVER = "http://192.168.90.54:8080/sync";
 
 $.support.cors = true;
 $.mobile.allowCrossDomainPages = true;
 
-var POMODORO_TIME = 60*2;
-var SHORT_BREAK_TIME = 60*5;
-var LONG_BREAK_TIME = 60*15;
+var CONFIG = [];
 
-var STATE = "pomodoro"; // pomodoro or short_break or long_break
+var WEEK_DAYS = new Array(7);
+WEEK_DAYS[0]="nd";
+WEEK_DAYS[1]="pn";
+WEEK_DAYS[2]="wt";
+WEEK_DAYS[3]="sr";
+WEEK_DAYS[4]="czw";
+WEEK_DAYS[5]="pt";
+WEEK_DAYS[6]="sb";
+
+//If you finished current task
+CURREST_TASK = true;
 
 var MEDIA = new Array();
 var MEDIA_PATH = "/android_asset/sounds/";
 
-function time_is_end()
+function set_config(value, id, serialize)
 {
-    switch(STATE)
+    if(serialize == undefined)
+	window.localStorage.setItem(id, value);
+    else
+	window.localStorage.setItem(id, $.toJSON( value ));
+}
+
+function load_config()
+{
+	CONFIG["SHORT_BREAK_TIME"] = parseInt(window.localStorage.getItem("SHORT_BREAK_TIME"));
+	CONFIG["POMODORO_TIME"] = parseInt(window.localStorage.getItem("POMODORO_TIME"));
+	CONFIG["LONG_BREAK_TIME"] = parseInt(window.localStorage.getItem("LONG_BREAK_TIME"));
+	CONFIG["TASKS"] = $.evalJSON(window.localStorage.getItem("TASKS"));
+	
+}
+
+function get_week_day()
+{
+	d = new Date();
+	return WEEK_DAYS[d.getDay()];
+}
+
+function minutesFromMidnight() {
+    var midnight = new Date();
+    midnight.setHours( 0 );
+    midnight.setMinutes( 0 );
+    midnight.setSeconds( 0 );
+    midnight.setMilliseconds( 0 );
+    return ( new Date().getTime() - midnight.getTime()) / 1000 / 60;
+}
+
+//nr of minutes from midnigth
+var BUFFER_TIME = 0;
+function count_buffer_time()
+{
+    BUFFER_TIME = minutesFromMidnight(); 
+    var tasks = CONFIG["TASKS"][get_week_day()];
+    for(task in tasks)
     {
-        case "pomodoro":
-        	 MEDIA["start_break"].play(); 
-             STATE = "short_break";
-             start_timer(SHORT_BREAK_TIME);
+	var state = tasks[task];
+	switch(state)
+	{
+	    case "#short_break":
+		 BUFFER_TIME += CONFIG["SHORT_BREAK_TIME"];
+	    break;
+	    case "#long_break":
+		 BUFFER_TIME += CONFIG["LONG_BREAK_TIME"];
+	    break;
+
+	    default:
+		 BUFFER_TIME += CONFIG["POMODORO_TIME"];
+	    break;
+	}
+    }
+}
+
+//time to minus from buffor
+function time_to_finish_work(time)
+{
+    BUFFER_TIME += time;
+    $("#time_to_finish_work").text(sec_to_text(time));
+}
+
+//If true returned - all is done
+function state_machine()
+{
+    if(CURRENT_TASK == false)
+    {
+	setTimeout(function() {time_to_finish_work(10); state_machine()}, 10);
+    }
+    var tasks = CONFIG["TASKS"][get_week_day()];
+
+    if(tasks.length == 0)
+	return true;
+
+    state = tasks.shift();
+
+    switch(state)
+    {
+        case "#short_break":
+	     MEDIA["start_break"].play(); 
+	     start_timer(CONFIG["SHORT_BREAK_TIME"]);
         break;
-        case "short_break":
-             STATE = "pomodoro";
-             start_timer(POMODORO_TIME);
+        case "#long_break":
+	     MEDIA["start_break"].play(); 
+	     start_timer(CONFIG["LONG_BREAK_TIME"]);
+	break;
+
+	default:
+	     MEDIA["finish_break"].play(); 
+	     CURRENT_TASK = false;
+             start_timer(CONFIG["POMODORO_TIME"]);
         break;
     }
+}
+function sec_to_text(time_left)
+{
+  var min = Math.floor(time_left/60);
+  var sec = Math.floor(time_left-min*60);
+  return ((""+min).length == 1 ? "0"+min : min )+":"+((""+sec).length == 1 ? "0"+sec : sec);
 }
 
 function start_timer(time_left)
 { 
-  var min = Math.floor(time_left/60);
-  var sec = Math.floor(time_left-min*60);
-  $("#timer").text(((""+min).length == 1 ? "0"+min : min )+":"+((""+sec).length == 1 ? "0"+sec : sec));
+  $("#timer").text(sec_to_text(time_left));
   setTimeout(function() { 
       time_left-=1;
       if(time_left >= 0)
       {
-      	  update_progress_bar(time_left/POMODORO_TIME);
+      	  update_progress_bar(time_left/CONFIG["POMODORO_TIME"]);
           start_timer(time_left); 
       }
       else
       {
-                time_is_end(); 
+                state_machine(); 
       }
   }, 1);
 }
@@ -71,22 +166,66 @@ function update_progress_bar(percent)
 function onDeviceReady(){  
 	MEDIA["start_break"] = new Media(MEDIA_PATH+"start_break.mp3");
 	MEDIA["finish_break"] = new Media(MEDIA_PATH+"finish_break.mp3");
+	
 
-    start_timer(POMODORO_TIME);
+	if(window.localStorage.getItem("POMODORO_TIME") == null)
+		set_config(60*25, "POMODORO_TIME");
+	if(window.localStorage.getItem("SHORT_BREAK_TIME") == null)
+		set_config(60*5, "SHORT_BREAK_TIME");
+	if(window.localStorage.getItem("LONG_BREAK_TIME") == null)
+		set_config(60*15, "LONG_BREAK_TIME");
+	if(window.localStorage.getItem("TASKS") == null)
+	{
+	    var empty = {};
+	    for(weekday in WEEK_DAYS)
+	    {
+		empty[WEEK_DAYS[weekday]] = {};
+	    }
+	    set_config(empty, "TASKS", true);
+	}
+		
+	load_config();
+
+	count_buffer_time();	
+
+	state_machine();
+
+	$("#next_task").bind("click", function(event, ui) {
+	    if(CURRENT_TASK == false)
+	    {
+		    CURRENT_TASK = true;
+	    }	
+	});
+
     if(navigator.network.connection.type != Connection.NONE)
     {
-    	$("#sync").bind("click", function(event, ui) {
-			$.getJSON(SYNC_SERVER, function(data) {
-			  $.gritter.add({ 
-    			title: 'Synchronizacja zakończona!',
-    			text: 'Synchronizacja z serwerem zakończyła się sukcesem.'
-  			});
-			
-				POMODORO_TIME = data["config"]["pomodoro_length"];
-				SHORT_BREAK_TIME = data["config"]["short_break_length"];
-				LONG_BREAK_TIME = data["config"]["long_break_length"];
-			});
+	$("#sync").bind("click", function(event, ui) {
+	    $.getJSON(SYNC_SERVER, function(data) {
+
+	      $.gritter.add({ 
+		    title: 'Synchronizacja zakończona!',
+		    text: 'Synchronizacja z serwerem zakończyła się sukcesem.'
 		});
+    
+		    set_config(data["config"]["pomodoro_length"], "POMODORO_TIME");
+		    set_config(data["config"]["short_break_length"], "SHORT_BREAK_TIME");
+		    set_config(data["config"]["long_break_length"], "LONG_BREAK_TIME");
+		    set_config(data["config"]["tasks"], "TASKS", true);
+		    
+		    load_config();
+		    if(CURRENT_TASK == false)
+		    {
+			count_buffer_time();	
+			state_machine();
+		    }
+		    
+	    }).error(function() { 
+		    $.gritter.add({ 
+		    title: 'Błąd synchronizacji!',
+		    text: 'Nie udało się zsynchronizować z serwerem: <b>' + SYNC_SERVER  + '</b>.'
+		    });
+	    });
+	    });
 	} else
 	{
 		$("#sync").addClass('ui-disabled');
@@ -94,27 +233,27 @@ function onDeviceReady(){
 }  
 document.addEventListener("deviceready", onDeviceReady, false);
 
-  </script>  
+</script>  
 </head>
 <body> 
 <div data-role="page">
-	<div data-role="header">
-		<h1>PP - Executiener</h1>
-	</div>
+    <div data-role="header">
+	    <h1>PP - Executiener</h1>
+    </div>
 
-	<div data-role="content">	
-		<p>Ilość dni bez przerwania planu: <strong>5</strong>.</p>	
-		<p>Czas zakończenia pracy: <strong>21:51</strong></p>	
-		<h2>Matematyka</h2>
-		<div id="timer_contaiter">
-			<div id="timer">00:00</div>
-			<div id="progress"></div>
-		</div>
-		<button>Zmotywuj</button>
-		<button id="next_task">Następne zadanie</button>
-		<br><br><br>
-		<button id="sync" data-icon="refresh">Synchronizuj</button>
-	</div>
+    <div data-role="content">	
+	    <p>Ilość dni bez przerwania planu: <strong>5</strong>.</p>	
+	    <p>Czas zakończenia pracy: <strong id="time_to_finish_work"></strong></p>	
+	    <h2>Matematyka</h2>
+	    <div id="timer_contaiter">
+		    <div id="timer">00:00</div>
+		    <div id="progress"></div>
+	    </div>
+	    <button>Odrocz zadanie</button>
+	    <button id="next_task">Następne zadanie</button>
+	    <br><br><br>
+	    <button id="sync" data-icon="refresh">Synchronizuj</button>
+    </div>
 </div>
 </body>
 </html>
