@@ -16,7 +16,8 @@
 
 <script type="text/javascript" charset="utf-8">  
 
-var SYNC_SERVER = "http://192.168.90.54:8080/sync";
+//var SYNC_SERVER = "http://192.168.90.54/ppserver/out";
+var SYNC_SERVER = "http://192.168.90.56:8080/sync";
 
 $.support.cors = true;
 $.mobile.allowCrossDomainPages = true;
@@ -33,7 +34,7 @@ WEEK_DAYS[5]="pt";
 WEEK_DAYS[6]="sb";
 
 //If you finished current task
-CURREST_TASK = true;
+CURRENT_TASK = true;
 
 var MEDIA = new Array();
 var MEDIA_PATH = "/android_asset/sounds/";
@@ -61,20 +62,20 @@ function get_week_day()
 	return WEEK_DAYS[d.getDay()];
 }
 
-function minutesFromMidnight() {
+function secFromMidnight() {
     var midnight = new Date();
     midnight.setHours( 0 );
     midnight.setMinutes( 0 );
     midnight.setSeconds( 0 );
     midnight.setMilliseconds( 0 );
-    return ( new Date().getTime() - midnight.getTime()) / 1000 / 60;
+    return ( new Date().getTime() - midnight.getTime()) / 1000 ;
 }
 
 //nr of minutes from midnigth
 var BUFFER_TIME = 0;
 function count_buffer_time()
 {
-    BUFFER_TIME = minutesFromMidnight(); 
+    BUFFER_TIME = secFromMidnight(); 
     var tasks = CONFIG["TASKS"][get_week_day()];
     for(task in tasks)
     {
@@ -95,11 +96,44 @@ function count_buffer_time()
     }
 }
 
+function move_long_break()
+{
+    var tasks = CONFIG["TASKS"][get_week_day()];
+    for(task in tasks)
+    {
+	var state = tasks[task];
+	var next_long = false;
+	switch(state)
+	{
+	    case "#long_break":
+	    	next_long = true;
+		tasks[task] = "#short_break";
+	    break;
+
+	    case "#short_break":
+		if(next_long == true)
+		{
+		    tasks[task] = "#long_break";
+		}
+	    	next_long = false;
+	    break;
+	}
+    }
+}
+
 //time to minus from buffor
 function time_to_finish_work(time)
 {
     BUFFER_TIME += time;
-    $("#time_to_finish_work").text(sec_to_text(time));
+    window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, gotFS, fail);
+    $("#time_to_finish_work").text(sec_to_hours(BUFFER_TIME));
+}
+
+function rm_first_break()
+{
+	var tasks = CONFIG["TASKS"][get_week_day()];
+	if(tasks[0] == "#long_break" || tasks[0] == "#short_break")
+		tasks.shift();
 }
 
 //If true returned - all is done
@@ -107,32 +141,49 @@ function state_machine()
 {
     if(CURRENT_TASK == false)
     {
-	setTimeout(function() {time_to_finish_work(10); state_machine()}, 10);
-    }
-    var tasks = CONFIG["TASKS"][get_week_day()];
-
-    if(tasks.length == 0)
-	return true;
-
-    state = tasks.shift();
-
-    switch(state)
+	setTimeout(function() {time_to_finish_work(1); state_machine()}, 1000);
+    } else
     {
-        case "#short_break":
-	     MEDIA["start_break"].play(); 
-	     start_timer(CONFIG["SHORT_BREAK_TIME"]);
-        break;
-        case "#long_break":
-	     MEDIA["start_break"].play(); 
-	     start_timer(CONFIG["LONG_BREAK_TIME"]);
-	break;
+	var tasks = CONFIG["TASKS"][get_week_day()];
 
-	default:
-	     MEDIA["finish_break"].play(); 
-	     CURRENT_TASK = false;
-             start_timer(CONFIG["POMODORO_TIME"]);
-        break;
+	if(tasks.length == 0)
+	    state = "#end";
+	else
+	    state = tasks.shift();
+
+	switch(state)
+	{
+	    case "#end":
+		 $("#task").text("Koniec!");
+	    break;
+	    case "#short_break":
+		 MEDIA["start_break"].play(); 
+		 CURRENT_TASK = false;
+		 start_timer(CONFIG["SHORT_BREAK_TIME"], function (){
+		     MEDIA["finish_break"].play(); 
+		 });
+	    break;
+	    case "#long_break":
+		 MEDIA["start_break"].play(); 
+		 CURRENT_TASK = false;
+		 start_timer(CONFIG["LONG_BREAK_TIME"], function (){
+		     MEDIA["finish_break"].play(); 
+		 });
+	    break;
+
+	    default:
+		 $("#task").text(state);
+		 start_timer(CONFIG["POMODORO_TIME"]);
+	    break;
+	}
     }
+}
+
+function sec_to_hours(time_left)
+{
+  var h = Math.floor(time_left/3600);
+  var min = Math.floor((time_left-h*3600)/60);
+  return ((""+h).length == 1 ? "0"+h : h )+":"+((""+min).length == 1 ? "0"+min : min);
 }
 function sec_to_text(time_left)
 {
@@ -141,26 +192,52 @@ function sec_to_text(time_left)
   return ((""+min).length == 1 ? "0"+min : min )+":"+((""+sec).length == 1 ? "0"+sec : sec);
 }
 
-function start_timer(time_left)
+var TIMER;
+
+function start_timer(time_left, callback)
 { 
   $("#timer").text(sec_to_text(time_left));
-  setTimeout(function() { 
+  TIMER = setTimeout(function() { 
       time_left-=1;
       if(time_left >= 0)
       {
       	  update_progress_bar(time_left/CONFIG["POMODORO_TIME"]);
-          start_timer(time_left); 
+          start_timer(time_left, callback); 
       }
       else
       {
+      		if(callback != undefined)
+		    callback();
                 state_machine(); 
       }
-  }, 1);
+  }, 1000);
+}
+function stop_timer()
+{
+    clearInterval(TIMER);
 }
 
 function update_progress_bar(percent)
 {
 	$("#progress").css("width", percent*260+"px");
+}
+
+function gotFS(fileSystem) {
+        fileSystem.root.getFile("finish_time.txt", {create: true, exclusive: false}, gotFileEntry, fail);
+}
+
+function gotFileEntry(fileEntry) {
+    fileEntry.createWriter(gotFileWriter, fail);
+}
+
+function gotFileWriter(writer) {
+    writer.onwriteend = function(evt) {
+    };
+    writer.write(sec_to_hours(BUFFER_TIME));
+}
+
+function fail(error) {
+    console.log(error.code);
 }
 
 function onDeviceReady(){  
@@ -179,14 +256,16 @@ function onDeviceReady(){
 	    var empty = {};
 	    for(weekday in WEEK_DAYS)
 	    {
-		empty[WEEK_DAYS[weekday]] = {};
+		empty[WEEK_DAYS[weekday]] = [];
 	    }
 	    set_config(empty, "TASKS", true);
 	}
 		
 	load_config();
-
+	rm_first_break();
 	count_buffer_time();	
+
+	time_to_finish_work(0);
 
 	state_machine();
 
@@ -194,6 +273,20 @@ function onDeviceReady(){
 	    if(CURRENT_TASK == false)
 	    {
 		    CURRENT_TASK = true;
+		    set_config(CONFIG["TASKS"], "TASKS", true);
+	    }	
+	});
+	$("#postpone").bind("click", function(event, ui) {
+	    if(CURRENT_TASK == true)
+	    {
+		stop_timer();
+		$("#timer").text(sec_to_text(0));
+		update_progress_bar(1)
+		count_buffer_time();	
+		time_to_finish_work(0);
+		move_long_break();
+		set_config(CONFIG["TASKS"], "TASKS", true);
+		state_machine();
 	    }	
 	});
 
@@ -207,17 +300,19 @@ function onDeviceReady(){
 		    text: 'Synchronizacja z serwerem zakończyła się sukcesem.'
 		});
     
+	      		
 		    set_config(data["config"]["pomodoro_length"], "POMODORO_TIME");
 		    set_config(data["config"]["short_break_length"], "SHORT_BREAK_TIME");
 		    set_config(data["config"]["long_break_length"], "LONG_BREAK_TIME");
-		    set_config(data["config"]["tasks"], "TASKS", true);
+		    set_config(data["pomodoros"], "TASKS", true);
 		    
 		    load_config();
-		    if(CURRENT_TASK == false)
-		    {
-			count_buffer_time();	
-			state_machine();
-		    }
+
+		    count_buffer_time();	
+		    time_to_finish_work(0);
+		    
+		    CURRENT_TASK = false;
+
 		    
 	    }).error(function() { 
 		    $.gritter.add({ 
@@ -233,6 +328,7 @@ function onDeviceReady(){
 }  
 document.addEventListener("deviceready", onDeviceReady, false);
 
+//window.onload = onDeviceReady;
 </script>  
 </head>
 <body> 
@@ -242,16 +338,16 @@ document.addEventListener("deviceready", onDeviceReady, false);
     </div>
 
     <div data-role="content">	
-	    <p>Ilość dni bez przerwania planu: <strong>5</strong>.</p>	
-	    <p>Czas zakończenia pracy: <strong id="time_to_finish_work"></strong></p>	
-	    <h2>Matematyka</h2>
+	<!--  <p>Ilość dni bez przerwania planu: <strong>5</strong>.</p> -->	
+	    <p>Czas zakończenia pracy: <strong id="time_to_finish_work">--:--</strong></p>	
+	    <h2 id="task">Koniec!</h2>
 	    <div id="timer_contaiter">
 		    <div id="timer">00:00</div>
 		    <div id="progress"></div>
 	    </div>
-	    <button>Odrocz zadanie</button>
+	    <button id="postpone">Odrocz zadanie</button>
 	    <button id="next_task">Następne zadanie</button>
-	    <br><br><br>
+	    <br><br><br><br>
 	    <button id="sync" data-icon="refresh">Synchronizuj</button>
     </div>
 </div>
