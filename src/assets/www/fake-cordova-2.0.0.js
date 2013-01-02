@@ -13,3 +13,6 @@ Media = function(path)
 
 }
 
+LocalFileSystem = new Object();
+LocalFileSystem.PERSISTENT = "";
+window.requestFileSystem = function() {}

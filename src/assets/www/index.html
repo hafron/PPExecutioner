@@ -10,6 +10,7 @@
 <script type="text/javascript" charset="utf-8" src="cordova-2.0.0.js"></script>
 <script src="jquery-1.8.1.min.js"></script>
 <script src="jquery.gritter.js"></script>
+<script src="dropbox.min.js"></script>
 <script src="jquery.mobile-1.2.0-beta.1.min.js"></script>
 
 <script src="jquery.json-2.4.min.js"></script>
@@ -320,11 +321,38 @@ function onDeviceReady(){
 		    text: 'Nie udało się zsynchronizować z serwerem: <b>' + SYNC_SERVER  + '</b>.'
 		    });
 	    });
+	    var client = new Dropbox.Client({
+		key: "5se1bfssnlo7fiy", secret: "ryr4a5u6cxwjbjz" 
 	    });
-	} else
-	{
-		$("#sync").addClass('ui-disabled');
-	}
+	    client.authDriver(new Dropbox.Drivers.Redirect());
+
+	    client.authenticate(function(error, client) {
+	      if (error) {
+			$.gritter.add({ 
+			title: 'Dropbox: błąd logowania!',
+			text: error
+			});
+	      } else
+	      {
+		client.readFile("todo/todo.txt", function(error, data) {
+		  if (error) {
+			$.gritter.add({ 
+			title: 'Dropbox: błąd odczytu!',
+			text: error
+			});
+		    } else
+		    {
+			  alert(data);  // data has the file's contents
+		    }
+		});
+	      }
+	    });
+
+	});
+    } else
+    {
+	    $("#sync").addClass('ui-disabled');
+    }
 }  
 document.addEventListener("deviceready", onDeviceReady, false);
 
@@ -345,9 +373,8 @@ document.addEventListener("deviceready", onDeviceReady, false);
 		    <div id="timer">00:00</div>
 		    <div id="progress"></div>
 	    </div>
-	    <button id="postpone">Odrocz zadanie</button>
+	    <!-- <button id="postpone">Odrocz zadanie</button> -->
 	    <button id="next_task">Następne zadanie</button>
-	    <br><br><br><br>
 	    <button id="sync" data-icon="refresh">Synchronizuj</button>
     </div>
 </div>
