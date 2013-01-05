@@ -1,0 +1,10 @@
+#!/bin/sed -f
+s/cordova/fake-cordova/
+s/\/\/\(var SYNC_SERVER.*127.*\)/\1/
+s/\(var SYNC_SERVER.*192.*\)/\/\/\1/
+s/\/\/\(var TASK_FILE.*127.*\)/\1/
+s/\(var TASK_FILE.*dropbox.*\)/\/\/\1/
+
+s/\/\/\(window\.onload.*\)/\1/
+s/\(document\.addEventListen.*\)/\/\/\1/
+

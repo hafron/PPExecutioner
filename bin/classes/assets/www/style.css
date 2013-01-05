@@ -22,3 +22,7 @@
 	top:0;
 	left:10px;
 }
+#todo {
+    border: 2px dashed #000;
+    text-align: center;
+}

@@ -1,0 +1,10 @@
+#!/bin/bash
+
+cp index.html /tmp/ppexind.html
+
+if [[ $(cat state) != "$1" ]]; then
+    ./$1 < /tmp/ppexind.html > index.html
+    echo -n "$1" > state
+else
+    echo "Already in $1"
+fi

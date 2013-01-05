@@ -7,18 +7,20 @@
 <link rel="stylesheet" href="css/jquery.gritter.css" />
 <link rel="stylesheet" href="style.css" />
 
-<script type="text/javascript" charset="utf-8" src="cordova-2.0.0.js"></script>
+<script type="text/javascript" charset="utf-8" src="fake-cordova-2.0.0.js"></script>
 <script src="jquery-1.8.1.min.js"></script>
 <script src="jquery.gritter.js"></script>
-<script src="dropbox.min.js"></script>
+<script src="jquery.cj-swipe.js"></script>
 <script src="jquery.mobile-1.2.0-beta.1.min.js"></script>
 
 <script src="jquery.json-2.4.min.js"></script>
 
 <script type="text/javascript" charset="utf-8">  
 
-//var SYNC_SERVER = "http://192.168.90.54/ppserver/out";
-var SYNC_SERVER = "http://192.168.90.56:8080/sync";
+var SYNC_SERVER = "http://127.0.0.1/ppserver/out";
+//var SYNC_SERVER = "http://192.168.90.56:8080/sync";
+var TASK_FILE = "http://127.0.0.1/todo.txt4";
+//var TASK_FILE = "https://dl.dropbox.com/s/yeazsnba4l1fzwi/todo.txt?dl=1";
 
 $.support.cors = true;
 $.mobile.allowCrossDomainPages = true;
@@ -54,6 +56,8 @@ function load_config()
 	CONFIG["POMODORO_TIME"] = parseInt(window.localStorage.getItem("POMODORO_TIME"));
 	CONFIG["LONG_BREAK_TIME"] = parseInt(window.localStorage.getItem("LONG_BREAK_TIME"));
 	CONFIG["TASKS"] = $.evalJSON(window.localStorage.getItem("TASKS"));
+
+	CONFIG["TODO"] = $.evalJSON(window.localStorage.getItem("TODO"));
 	
 }
 
@@ -137,6 +141,36 @@ function rm_first_break()
 		tasks.shift();
 }
 
+var TODO_INDEX = -1;
+
+function add_todo(state)
+{
+    	 if(TODO_INDEX == -1)
+	 {
+	     var todo = CONFIG["TODO"][state.toString()]
+	     if(todo != undefined)
+	     {
+		 TODO_INDEX = 0;
+		 $("#todo p").text(todo[0]);
+	     } else
+	     {
+		 TODO_INDEX = -1;
+		 $("#todo p").text('Brak zadania');
+	     }
+	} else
+	{
+	     var todo = CONFIG["TODO"][state.toString()][TODO_INDEX]
+	     if(todo != undefined)
+	     {
+		 $("#todo p").text(todo);
+	     } else
+	     {
+		 TODO_INDEX = -1;
+		 $("#todo p").text('Brak zadania');
+	     }
+	}
+}
+
 //If true returned - all is done
 function state_machine()
 {
@@ -173,9 +207,32 @@ function state_machine()
 	    break;
 
 	    default:
+	    	 if($("#task").text() != state)
+		 {
+		     TODO_INDEX = -1;
+		 }
 		 $("#task").text(state);
+		 add_todo(state);
 		 start_timer(CONFIG["POMODORO_TIME"]);
 	    break;
+	}
+    }
+}
+function get_todo(dir)
+{
+    if(dir == 'newer')
+	num = -1
+    else
+	num = 1
+
+    if(TODO_INDEX > -1)
+    {
+	state = $("#task").text();
+	var todo = CONFIG["TODO"][state.toString()][TODO_INDEX+num];
+	if(todo != undefined)
+	{
+	    TODO_INDEX = TODO_INDEX+num;
+	    $("#todo p").text(todo);
 	}
     }
 }
@@ -261,6 +318,11 @@ function onDeviceReady(){
 	    }
 	    set_config(empty, "TASKS", true);
 	}
+	if(window.localStorage.getItem("TODO") == null)
+	{
+	    var empty = {};
+	    set_config(empty, "TODO", true);
+	}
 		
 	load_config();
 	rm_first_break();
@@ -321,42 +383,58 @@ function onDeviceReady(){
 		    text: 'Nie udało się zsynchronizować z serwerem: <b>' + SYNC_SERVER  + '</b>.'
 		    });
 	    });
-	    var client = new Dropbox.Client({
-		key: "5se1bfssnlo7fiy", secret: "ryr4a5u6cxwjbjz" 
-	    });
-	    client.authDriver(new Dropbox.Drivers.Redirect());
-
-	    client.authenticate(function(error, client) {
-	      if (error) {
-			$.gritter.add({ 
-			title: 'Dropbox: błąd logowania!',
-			text: error
-			});
-	      } else
-	      {
-		client.readFile("todo/todo.txt", function(error, data) {
-		  if (error) {
-			$.gritter.add({ 
-			title: 'Dropbox: błąd odczytu!',
-			text: error
-			});
-		    } else
+	    //Sync with todo
+	    $.get(TASK_FILE, function(data) {
+		    lines = data.split("\n");
+		    var place = /@[\S]*/g
+		    var category = /\+[\S]*/g
+		    lin = {}
+		    for(line in lines)
 		    {
-			  alert(data);  // data has the file's contents
+			var str = lines[line]
+			var res = str.match(category)
+		    	if(res != null) 
+			{
+				str = str.replace(place, "");
+				str = str.replace(category, "");
+				//Trim
+				str = str.replace(/^\s+|\s+$/g, "");
+				key = res[0]
+				key = key.slice(1, key.length)
+				if(lin[key] == undefined)
+				    lin[key] = []
+				lin[key].push( str );
+			}
+				
 		    }
-		});
-	      }
-	    });
+
+		    set_config(lin , "TODO", true);
+
+		    state = $("#task").text();
+		    add_todo(state);
+
+		}).error(function() {
+		    $.gritter.add({ 
+		    title: 'Błąd synchronizacji!',
+		    text: 'Nie udało się pobrać pliku z zadaniami'
+		    });
+	      }); 
 
 	});
     } else
     {
 	    $("#sync").addClass('ui-disabled');
     }
-}  
-document.addEventListener("deviceready", onDeviceReady, false);
+    // listen for only the left swipe event
+    $("#todo").touchSwipeLeft(function() {get_todo("older")}); 
 
-//window.onload = onDeviceReady;
+    // listen for only the right swipe event
+    //$("#todo").touchSwipeRight(get_newer_todo); 
+    $("#todo").touchSwipeRight(function() {get_todo("newer")}); 
+}  
+//document.addEventListener("deviceready", onDeviceReady, false);
+
+window.onload = onDeviceReady;
 </script>  
 </head>
 <body> 
@@ -374,7 +452,13 @@ document.addEventListener("deviceready", onDeviceReady, false);
 		    <div id="progress"></div>
 	    </div>
 	    <!-- <button id="postpone">Odrocz zadanie</button> -->
+	    <br>
 	    <button id="next_task">Następne zadanie</button>
+	    <br>
+	    <div id="todo">
+		<p></p>
+	    </div>
+	    <br>
 	    <button id="sync" data-icon="refresh">Synchronizuj</button>
     </div>
 </div>
