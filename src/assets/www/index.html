@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="css/jquery.gritter.css" />
 <link rel="stylesheet" href="style.css" />
 
-<script type="text/javascript" charset="utf-8" src="cordova-2.0.0.js"></script>
+<script type="text/javascript" charset="utf-8" src="fake-cordova-2.0.0.js"></script>
 <script src="jquery-1.8.1.min.js"></script>
 <script src="jquery.gritter.js"></script>
 <script src="jquery.cj-swipe.js"></script>
@@ -17,10 +17,12 @@
 
 <script type="text/javascript" charset="utf-8">  
 
-//var SYNC_SERVER = "http://127.0.0.1/ppserver/out";
-var SYNC_SERVER = "http://192.168.90.56:8080/sync";
-//var TASK_FILE = "http://127.0.0.1/todo.txt4";
-var TASK_FILE = "https://dl.dropbox.com/s/yeazsnba4l1fzwi/todo.txt?dl=1";
+var SYNC_SERVER = "http://127.0.0.1/ppserver/out";
+//var SYNC_SERVER = "http://192.168.90.56:8080/sync";
+var TASK_FILE = "http://127.0.0.1/todo.txt4";
+//var TASK_FILE = "https://dl.dropbox.com/s/yeazsnba4l1fzwi/todo.txt?dl=1";
+
+var SECOND = 1000;//for debug only
 
 $.support.cors = true;
 $.mobile.allowCrossDomainPages = true;
@@ -73,7 +75,7 @@ function secFromMidnight() {
     midnight.setMinutes( 0 );
     midnight.setSeconds( 0 );
     midnight.setMilliseconds( 0 );
-    return ( new Date().getTime() - midnight.getTime()) / 1000 ;
+    return ( new Date().getTime() - midnight.getTime()) / SECOND;
 }
 
 //nr of minutes from midnigth
@@ -171,7 +173,7 @@ function state_machine()
 {
     if(CURRENT_TASK == false)
     {
-	setTimeout(function() {time_to_finish_work(1); state_machine()}, 1000);
+	setTimeout(function() {time_to_finish_work(1); state_machine()}, SECOND);
     } else
     {
 	var tasks = CONFIG["TASKS"][get_week_day()];
@@ -188,15 +190,19 @@ function state_machine()
 	    break;
 	    case "#short_break":
 		 MEDIA["start_break"].play(); 
+		display_button("skip_break");
 		 CURRENT_TASK = false;
 		 start_timer(CONFIG["SHORT_BREAK_TIME"], function (){
+		display_button("next_task");
 		     MEDIA["finish_break"].play(); 
 		 });
 	    break;
 	    case "#long_break":
 		 MEDIA["start_break"].play(); 
 		 CURRENT_TASK = false;
+		display_button("skip_break");
 		 start_timer(CONFIG["LONG_BREAK_TIME"], function (){
+		display_button("next_task");
 		     MEDIA["finish_break"].play(); 
 		 });
 	    break;
@@ -207,6 +213,7 @@ function state_machine()
 		     TODO_INDEX = -1;
 		 }
 		 $("#task").text(state);
+		display_button("postpone");
 		 add_todo(state);
 		 start_timer(CONFIG["POMODORO_TIME"]);
 	    break;
@@ -250,6 +257,7 @@ var TIMER;
 function start_timer(time_left, callback)
 { 
   $("#timer").text(sec_to_text(time_left));
+  update_progress_bar(time_left/CONFIG["POMODORO_TIME"]);
   TIMER = setTimeout(function() { 
       time_left-=1;
       if(time_left >= 0)
@@ -263,7 +271,7 @@ function start_timer(time_left, callback)
 		    callback();
                 state_machine(); 
       }
-  }, 1000);
+  }, SECOND);
 }
 function stop_timer()
 {
@@ -293,6 +301,19 @@ function fail(error) {
     console.log(error.code);
 }
 
+function display_button(role)
+{
+    var roles =
+    {
+	'postpone': 'Anuluj pomodoro',
+	'skip_break': 'Pomin przerwę',
+	'next_task': 'Następne zadanie'
+    }
+    $("#controls span span").text(roles[role]);
+    $("#controls button").attr("id", role);
+    $("#controls button").text(roles[role]);
+}
+
 function onDeviceReady(){  
 	MEDIA["start_break"] = new Media(MEDIA_PATH+"start_break.mp3");
 	MEDIA["finish_break"] = new Media(MEDIA_PATH+"finish_break.mp3");
@@ -318,6 +339,7 @@ function onDeviceReady(){
 	    var empty = {};
 	    set_config(empty, "TODO", true);
 	}
+
 		
 	load_config();
 	rm_first_break();
@@ -327,19 +349,27 @@ function onDeviceReady(){
 
 	state_machine();
 
-	$("#next_task").bind("click", function(event, ui) {
+	$("#next_task").live("click", function(event, ui) {
 	    if(CURRENT_TASK == false)
 	    {
 		    CURRENT_TASK = true;
 		    set_config(CONFIG["TASKS"], "TASKS", true);
 	    }	
 	});
-	$("#postpone").bind("click", function(event, ui) {
+	$("#skip_break").live("click", function(event, ui) {
+		stop_timer();
+		$("#timer").text(sec_to_text(0));
+		count_buffer_time();	
+		time_to_finish_work(0);
+		update_progress_bar(0)
+		display_button('next_task')
+		state_machine();
+	});
+	$("#postpone").live("click", function(event, ui) {
 	    if(CURRENT_TASK == true)
 	    {
 		stop_timer();
 		$("#timer").text(sec_to_text(0));
-		update_progress_bar(1)
 		count_buffer_time();	
 		time_to_finish_work(0);
 		move_long_break();
@@ -432,9 +462,9 @@ function onDeviceReady(){
     //$("#todo").touchSwipeRight(get_newer_todo); 
     $("#todo").touchSwipeRight(function() {get_todo("newer")}); 
 }  
-document.addEventListener("deviceready", onDeviceReady, false);
+//document.addEventListener("deviceready", onDeviceReady, false);
 
-//window.onload = onDeviceReady;
+window.onload = onDeviceReady;
 </script>  
 </head>
 <body> 
@@ -451,12 +481,13 @@ document.addEventListener("deviceready", onDeviceReady, false);
 		    <div id="timer">00:00</div>
 		    <div id="progress"></div>
 	    </div>
-	    <!-- <button id="postpone">Odrocz zadanie</button> -->
 	    <br>
-	    <button id="next_task">Następne zadanie</button>
+	    <div id="controls">
+		<button id="postpone">Anuluj pomodoro</button> 
+	    </div>
 	    <br>
 	    <div id="todo">
-		<p></p>
+		<p>Brak zadania</p>
 	    </div>
 	    <br>
 	    <button id="sync" data-icon="refresh">Synchronizuj</button>
