@@ -145,30 +145,25 @@ var TODO_INDEX = -1;
 
 function add_todo(state)
 {
-    	 if(TODO_INDEX == -1)
-	 {
 	     var todo = CONFIG["TODO"][state.toString()]
 	     if(todo != undefined)
 	     {
-		 TODO_INDEX = 0;
-		 $("#todo p").text(todo[0]);
+		 if(TODO_INDEX == -1)
+		     TODO_INDEX = 0;
+		 var todo = CONFIG["TODO"][state.toString()][TODO_INDEX]
+		 if(todo != undefined)
+		 {
+		     $("#todo p").text(todo);
+		 } else
+		 {
+		     TODO_INDEX = -1;
+		     $("#todo p").text('Brak zadania');
+		 }
 	     } else
 	     {
 		 TODO_INDEX = -1;
 		 $("#todo p").text('Brak zadania');
 	     }
-	} else
-	{
-	     var todo = CONFIG["TODO"][state.toString()][TODO_INDEX]
-	     if(todo != undefined)
-	     {
-		 $("#todo p").text(todo);
-	     } else
-	     {
-		 TODO_INDEX = -1;
-		 $("#todo p").text('Brak zadania');
-	     }
-	}
 }
 
 //If true returned - all is done
@@ -388,6 +383,7 @@ function onDeviceReady(){
 		    lines = data.split("\n");
 		    var place = /@[\S]*/g
 		    var category = /\+[\S]*/g
+		    var finished = /^x[\s]*/
 		    lin = {}
 		    for(line in lines)
 		    {
@@ -395,21 +391,25 @@ function onDeviceReady(){
 			var res = str.match(category)
 		    	if(res != null) 
 			{
-				str = str.replace(place, "");
-				str = str.replace(category, "");
-				//Trim
-				str = str.replace(/^\s+|\s+$/g, "");
-				key = res[0]
-				key = key.slice(1, key.length)
-				if(lin[key] == undefined)
-				    lin[key] = []
-				lin[key].push( str );
+				if(!str.match(finished))
+				{
+				    str = str.replace(place, "");
+				    str = str.replace(category, "");
+				    //Trim
+				    str = str.replace(/^\s+|\s+$/g, "");
+				    key = res[0]
+				    key = key.slice(1, key.length)
+				    if(lin[key] == undefined)
+					lin[key] = []
+				    lin[key].push( str );
+				}
 			}
 				
 		    }
 
 		    set_config(lin , "TODO", true);
 
+		    load_config()
 		    state = $("#task").text();
 		    add_todo(state);
 

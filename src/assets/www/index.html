@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="css/jquery.gritter.css" />
 <link rel="stylesheet" href="style.css" />
 
-<script type="text/javascript" charset="utf-8" src="fake-cordova-2.0.0.js"></script>
+<script type="text/javascript" charset="utf-8" src="cordova-2.0.0.js"></script>
 <script src="jquery-1.8.1.min.js"></script>
 <script src="jquery.gritter.js"></script>
 <script src="jquery.cj-swipe.js"></script>
@@ -17,10 +17,10 @@
 
 <script type="text/javascript" charset="utf-8">  
 
-var SYNC_SERVER = "http://127.0.0.1/ppserver/out";
-//var SYNC_SERVER = "http://192.168.90.56:8080/sync";
-var TASK_FILE = "http://127.0.0.1/todo.txt4";
-//var TASK_FILE = "https://dl.dropbox.com/s/yeazsnba4l1fzwi/todo.txt?dl=1";
+//var SYNC_SERVER = "http://127.0.0.1/ppserver/out";
+var SYNC_SERVER = "http://192.168.90.56:8080/sync";
+//var TASK_FILE = "http://127.0.0.1/todo.txt4";
+var TASK_FILE = "https://dl.dropbox.com/s/yeazsnba4l1fzwi/todo.txt?dl=1";
 
 $.support.cors = true;
 $.mobile.allowCrossDomainPages = true;
@@ -145,30 +145,25 @@ var TODO_INDEX = -1;
 
 function add_todo(state)
 {
-    	 if(TODO_INDEX == -1)
-	 {
 	     var todo = CONFIG["TODO"][state.toString()]
 	     if(todo != undefined)
 	     {
-		 TODO_INDEX = 0;
-		 $("#todo p").text(todo[0]);
+		 if(TODO_INDEX == -1)
+		     TODO_INDEX = 0;
+		 var todo = CONFIG["TODO"][state.toString()][TODO_INDEX]
+		 if(todo != undefined)
+		 {
+		     $("#todo p").text(todo);
+		 } else
+		 {
+		     TODO_INDEX = -1;
+		     $("#todo p").text('Brak zadania');
+		 }
 	     } else
 	     {
 		 TODO_INDEX = -1;
 		 $("#todo p").text('Brak zadania');
 	     }
-	} else
-	{
-	     var todo = CONFIG["TODO"][state.toString()][TODO_INDEX]
-	     if(todo != undefined)
-	     {
-		 $("#todo p").text(todo);
-	     } else
-	     {
-		 TODO_INDEX = -1;
-		 $("#todo p").text('Brak zadania');
-	     }
-	}
 }
 
 //If true returned - all is done
@@ -388,6 +383,7 @@ function onDeviceReady(){
 		    lines = data.split("\n");
 		    var place = /@[\S]*/g
 		    var category = /\+[\S]*/g
+		    var finished = /^x[\s]*/
 		    lin = {}
 		    for(line in lines)
 		    {
@@ -395,21 +391,25 @@ function onDeviceReady(){
 			var res = str.match(category)
 		    	if(res != null) 
 			{
-				str = str.replace(place, "");
-				str = str.replace(category, "");
-				//Trim
-				str = str.replace(/^\s+|\s+$/g, "");
-				key = res[0]
-				key = key.slice(1, key.length)
-				if(lin[key] == undefined)
-				    lin[key] = []
-				lin[key].push( str );
+				if(!str.match(finished))
+				{
+				    str = str.replace(place, "");
+				    str = str.replace(category, "");
+				    //Trim
+				    str = str.replace(/^\s+|\s+$/g, "");
+				    key = res[0]
+				    key = key.slice(1, key.length)
+				    if(lin[key] == undefined)
+					lin[key] = []
+				    lin[key].push( str );
+				}
 			}
 				
 		    }
 
 		    set_config(lin , "TODO", true);
 
+		    load_config()
 		    state = $("#task").text();
 		    add_todo(state);
 
@@ -432,9 +432,9 @@ function onDeviceReady(){
     //$("#todo").touchSwipeRight(get_newer_todo); 
     $("#todo").touchSwipeRight(function() {get_todo("newer")}); 
 }  
-//document.addEventListener("deviceready", onDeviceReady, false);
+document.addEventListener("deviceready", onDeviceReady, false);
 
-window.onload = onDeviceReady;
+//window.onload = onDeviceReady;
 </script>  
 </head>
 <body> 
